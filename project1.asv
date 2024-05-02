@@ -1,0 +1,64 @@
+% Import the data
+data = readtable('Algerian_forest_fires_dataset_UPDATE.csv');
+
+% Convert the "Classes" column into categorical data
+data.Classes = categorical(data.Classes);
+
+% Remove rows with missing values in the "Classes" column
+data = data(~ismissing(data.Classes), :);
+
+% Create a non-stratified holdout partition
+rng('default'); % For reproducibility
+holdoutRatio = 0.3; % Hold out 30% of the data for testing
+cv = cvpartition(height(data), 'HoldOut', holdoutRatio);
+
+% Create the training and testing sets
+trainingData = data(cv.training,:);
+testingData = data(cv.test,:);
+
+% Separate the predictor variables (features) from the response variable (Classes)
+predictorVars = data.Properties.VariableNames(1:end-1); % Assuming "Classes" is the last column in the dataset
+XTrain = trainingData{:, predictorVars};
+YTrain = trainingData.Classes;
+XTest = testingData{:, predictorVars};
+YTest = testingData.Classes;
+
+% Normalize the predictor variables
+XTrain_normalized = rescale(XTrain, 'InputMin', min(XTrain, [], 1), 'InputMax', max(XTrain, [], 1));
+XTest_normalized = rescale(XTest, 'InputMin', min(XTrain, [], 1), 'InputMax', max(XTrain, [], 1));
+
+% Train the k-NN classifier using the normalized data
+k = 3; % Choose the number of neighbors
+knnModel = fitcknn(XTrain_normalized, YTrain, 'NumNeighbors', k);
+
+% Predict the classes for the testing set using the normalized data
+YPred_knn = predict(knnModel, XTest_normalized);
+
+% Evaluate the performance of the k-NN classifier
+accuracy_knn = sum(YPred_knn == YTest) / length(YTest);
+confusionMatrix_knn = confusionmat(YTest, YPred_knn);
+
+% Train the linear regression model using the normalized data
+linearModel = fitlm(XTrain_normalized, YTrain);
+
+% Predict the classes for the testing set using the normalized data
+YPred_lm = round(predict(linearModel, XTest_normalized)); % Round the predictions since they are binary
+YPred_lm = categorical(YPred_lm, [0, 1], {'not fire', 'fire'}); % Convert the predictions to categorical data
+
+% Evaluate the performance of the linear regression model
+accuracy_lm = sum(YPred_lm == YTest) / length(YTest);
+confusionMatrix_lm = confusionmat(YTest, YPred_lm);
+
+% Create a scatter plot matrix for the training data
+figure;
+gplotmatrix(XTrain, [], YTrain);
+xlabel(predictorVars);
+ylabel(predictorVars);
+title('Scatter plot matrix of training data');
+
+% Create a scatter plot matrix for the testing data with true classes
+figure;
+gplotmatrix(XTest, [], YTest);
+xlabel(predictorVars);
+ylabel(predictorVars);
+title('Sc
